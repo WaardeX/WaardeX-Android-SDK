@@ -11,7 +11,7 @@ object WaardeXAdSDK {
     private var isInitialized = false
     private var applicationContext: Context? = null
     
-    internal var baseUrl: String = "http://uswest.justbidit.xyz:8800/"
+    internal var baseUrl: String = "https://useast.justbidit2.xyz:8843/"
     internal var appName: String = ""
     internal var appPassword: String = ""
     internal var isDebugMode: Boolean = false

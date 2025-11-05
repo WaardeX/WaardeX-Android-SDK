@@ -1,7 +1,10 @@
+# WaardeX Ad SDK for Android
+
+Android SDK for displaying ads via OpenRTB protocol.
 
 ## Quick Start
 
-### 1. Add to Project
+### 1. Add SDK
 
 **settings.gradle:**
 ```gradle
@@ -35,10 +38,15 @@ class MyApplication : Application() {
 
 ### 3. Banner Ad
 
+**XML:**
 ```xml
-
+<com.waardex.adsdk.views.BannerAdView
+    android:id="@+id/bannerAd"
+    android:layout_width="320dp"
+    android:layout_height="50dp" />
 ```
 
+**Kotlin:**
 ```kotlin
 bannerAd.loadAd()
 ```
@@ -46,31 +54,22 @@ bannerAd.loadAd()
 ### 4. Interstitial Ad
 
 ```kotlin
-val interstitial = InterstitialAd(this)
-interstitial.loadAd()
+val interstitialAd = InterstitialAd(this)
+interstitialAd.loadAd()
 
-if (interstitial.isReady()) {
-    interstitial.show()
+if (interstitialAd.isReady()) {
+    interstitialAd.show()
 }
 ```
 
 ## Features
 
-- OpenRTB 2.5 protocol
 - Banner ads (320x50, 300x250, 728x90)
-- Interstitial ads
+- Interstitial ads (full-screen)
+- OpenRTB 2.5 protocol
 - Automatic tracking
 - Debug mode
-- ProGuard rules included
-
-## Technical Details
-
-- Min SDK: Android 21+
-- Language: Kotlin
-- Dependencies: OkHttp, Gson, Coroutines
-- Package: com.waardex.adsdk
 
 ## Support
 
 Website: https://waardex.com
-
