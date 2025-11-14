@@ -38,7 +38,23 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onAdFailedToLoad(error: AdError) {
-                Log.e("MainActivity", "Rewarded video failed to load: ${error.message}")
+                when (error.code) {
+                    com.waardex.adsdk.core.AdErrorCode.NO_FILL -> {
+                        Log.d("MainActivity", "No ads available right now")
+                        // This is normal - no ads to show, try again later
+                    }
+                    com.waardex.adsdk.core.AdErrorCode.NETWORK_ERROR -> {
+                        Log.e("MainActivity", "Network error: ${error.message}")
+                        // Check internet connection
+                    }
+                    com.waardex.adsdk.core.AdErrorCode.TIMEOUT -> {
+                        Log.e("MainActivity", "Request timeout: ${error.message}")
+                        // Retry or check server status
+                    }
+                    else -> {
+                        Log.e("MainActivity", "Ad failed to load: ${error.message} (code: ${error.code})")
+                    }
+                }
             }
 
             override fun onUserEarnedReward() {

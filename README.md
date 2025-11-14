@@ -101,6 +101,14 @@ if (rewardedVideoAd.isReady()) {
 - **OpenRTB 2.5 protocol** compliant
 - **Automatic tracking** for impressions and clicks
 - **Debug mode** for development
+- **Rich data enrichment** for better bid rates:
+  - Google Advertising ID (GAID) with limit tracking support
+  - IP address detection for geo-targeting
+  - Detailed connection type (WiFi, 2G, 3G, 4G, 5G)
+  - High-quality User Agent from WebView
+  - Geo location (if permissions granted)
+  - Play Store URL for app verification
+  - Device metrics, manufacturer, OS version
 
 ## Supported Video Formats
 
@@ -108,6 +116,58 @@ if (rewardedVideoAd.isReady()) {
 - **VAST XML** - Automatically parsed, MediaFile URL extracted
 - **HTML5 video tag** - Rendered in WebView with JavaScript event tracking
 - **Video formats**: MP4, WebM, 3GPP
+
+## Error Handling
+
+The SDK provides error codes to differentiate between "no fill" (no ads available) and actual errors:
+
+```kotlin
+rewardedVideoAd.setAdListener(object : RewardedVideoAdListener {
+    override fun onAdFailedToLoad(error: AdError) {
+        when (error.code) {
+            AdErrorCode.NO_FILL -> {
+                // Normal situation - no ads available right now
+                // This is NOT an error, just retry later
+                Log.d(TAG, "No ads available")
+            }
+            AdErrorCode.NETWORK_ERROR -> {
+                // Network connectivity issues
+                Log.e(TAG, "Network error: ${error.message}")
+            }
+            AdErrorCode.TIMEOUT -> {
+                // Request timeout - server took too long
+                Log.e(TAG, "Request timeout: ${error.message}")
+                // Retry with exponential backoff or check server status
+            }
+            AdErrorCode.INVALID_REQUEST -> {
+                // Invalid ad request or configuration
+                Log.e(TAG, "Invalid request: ${error.message}")
+            }
+            AdErrorCode.INTERNAL_ERROR -> {
+                // SDK internal error
+                Log.e(TAG, "Internal error: ${error.message}")
+            }
+            AdErrorCode.SDK_NOT_INITIALIZED -> {
+                // SDK not initialized
+                Log.e(TAG, "SDK not initialized")
+            }
+            else -> {
+                Log.e(TAG, "Unknown error: ${error.message}")
+            }
+        }
+    }
+})
+```
+
+### Error Codes
+
+- **`NO_FILL` (0)** - No ads available (not an error, normal business situation)
+- **`NETWORK_ERROR` (1)** - Network connectivity issues
+- **`TIMEOUT` (2)** - Request timeout (server took too long to respond)
+- **`INVALID_REQUEST` (3)** - Invalid ad request or configuration
+- **`INTERNAL_ERROR` (4)** - SDK internal error
+- **`SDK_NOT_INITIALIZED` (5)** - SDK not initialized
+- **`UNKNOWN` (99)** - Unknown error
 
 ## Lifecycle Management
 
@@ -129,6 +189,29 @@ override fun onDestroy() {
     rewardedVideoAd.destroy()
 }
 ```
+
+## Permissions
+
+### Required Permissions
+
+Add these to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+```
+
+### Optional Permissions (for better bid rates)
+
+These permissions improve ad targeting and revenue but are not required:
+
+```xml
+<!-- For geo-targeting (improves CPM by ~15-30%) -->
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+```
+
+**Note**: The SDK automatically detects available permissions and collects only the data it has access to. If location permissions are not granted, geo data will not be included in bid requests.
 
 ## Support
 
