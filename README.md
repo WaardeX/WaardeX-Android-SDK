@@ -1,6 +1,6 @@
 # WaardeX Ad SDK for Android
 
-Android SDK for displaying ads via OpenRTB protocol.
+Android SDK for displaying ads.
 
 ## Quick Start
 
