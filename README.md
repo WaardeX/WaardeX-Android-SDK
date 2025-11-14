@@ -126,6 +126,11 @@ rewardedVideoAd.setAdListener(object : RewardedVideoAdListener {
                 // Network connectivity issues
                 Log.e(TAG, "Network error: ${error.message}")
             }
+            AdErrorCode.TIMEOUT -> {
+                // Request timeout - server took too long
+                Log.e(TAG, "Request timeout: ${error.message}")
+                // Retry with exponential backoff or check server status
+            }
             AdErrorCode.INVALID_REQUEST -> {
                 // Invalid ad request or configuration
                 Log.e(TAG, "Invalid request: ${error.message}")
@@ -150,9 +155,10 @@ rewardedVideoAd.setAdListener(object : RewardedVideoAdListener {
 
 - **`NO_FILL` (0)** - No ads available (not an error, normal business situation)
 - **`NETWORK_ERROR` (1)** - Network connectivity issues
-- **`INVALID_REQUEST` (2)** - Invalid ad request or configuration
-- **`INTERNAL_ERROR` (3)** - SDK internal error
-- **`SDK_NOT_INITIALIZED` (4)** - SDK not initialized
+- **`TIMEOUT` (2)** - Request timeout (server took too long to respond)
+- **`INVALID_REQUEST` (3)** - Invalid ad request or configuration
+- **`INTERNAL_ERROR` (4)** - SDK internal error
+- **`SDK_NOT_INITIALIZED` (5)** - SDK not initialized
 - **`UNKNOWN` (99)** - Unknown error
 
 ## Lifecycle Management

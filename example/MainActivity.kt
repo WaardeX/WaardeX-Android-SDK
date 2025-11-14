@@ -47,6 +47,10 @@ class MainActivity : AppCompatActivity() {
                         Log.e("MainActivity", "Network error: ${error.message}")
                         // Check internet connection
                     }
+                    com.waardex.adsdk.core.AdErrorCode.TIMEOUT -> {
+                        Log.e("MainActivity", "Request timeout: ${error.message}")
+                        // Retry or check server status
+                    }
                     else -> {
                         Log.e("MainActivity", "Ad failed to load: ${error.message} (code: ${error.code})")
                     }

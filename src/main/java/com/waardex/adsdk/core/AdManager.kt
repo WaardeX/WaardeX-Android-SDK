@@ -9,6 +9,7 @@ import com.waardex.adsdk.network.OpenRTBClient
 import com.waardex.adsdk.utils.DeviceInfoCollector
 import kotlinx.coroutines.*
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.UUID
 
 internal class AdManager {
@@ -19,6 +20,11 @@ internal class AdManager {
     fun loadBannerAd(context: Context, width: Int, height: Int, listener: AdLoadListener) {
         if (!WaardeXAdSDK.isInitialized()) {
             listener.onAdFailedToLoad(AdError("SDK not initialized", AdErrorCode.SDK_NOT_INITIALIZED))
+            return
+        }
+
+        if (width <= 0 || height <= 0) {
+            listener.onAdFailedToLoad(AdError("Invalid banner size: ${width}x${height}", AdErrorCode.INVALID_REQUEST))
             return
         }
 
@@ -34,9 +40,12 @@ internal class AdManager {
                         else listener.onAdFailedToLoad(AdError("Failed to parse ad", AdErrorCode.INTERNAL_ERROR))
                     },
                     onFailure = { exception ->
-                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
-                        else if (exception is IOException) listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
-                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
+                        when {
+                            exception is NoBidException -> listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
+                            exception is SocketTimeoutException -> listener.onAdFailedToLoad(AdError("Request timeout", AdErrorCode.TIMEOUT))
+                            exception is IOException -> listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
+                            else -> listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
+                        }
                     }
                 )
             } catch (e: Exception) {
@@ -64,9 +73,12 @@ internal class AdManager {
                         else listener.onAdFailedToLoad(AdError("Failed to parse ad", AdErrorCode.INTERNAL_ERROR))
                     },
                     onFailure = { exception ->
-                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
-                        else if (exception is IOException) listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
-                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
+                        when {
+                            exception is NoBidException -> listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
+                            exception is SocketTimeoutException -> listener.onAdFailedToLoad(AdError("Request timeout", AdErrorCode.TIMEOUT))
+                            exception is IOException -> listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
+                            else -> listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
+                        }
                     }
                 )
             } catch (e: Exception) {
@@ -94,9 +106,12 @@ internal class AdManager {
                         else listener.onAdFailedToLoad(AdError("Failed to parse ad", AdErrorCode.INTERNAL_ERROR))
                     },
                     onFailure = { exception ->
-                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
-                        else if (exception is IOException) listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
-                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
+                        when {
+                            exception is NoBidException -> listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
+                            exception is SocketTimeoutException -> listener.onAdFailedToLoad(AdError("Request timeout", AdErrorCode.TIMEOUT))
+                            exception is IOException -> listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
+                            else -> listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
+                        }
                     }
                 )
             } catch (e: Exception) {
@@ -108,9 +123,10 @@ internal class AdManager {
     
     private suspend fun createBannerBidRequest(context: Context, width: Int, height: Int): BidRequest {
         val device = DeviceInfoCollector.collectDeviceInfo(context)
+        validateDevice(device)
         val app = DeviceInfoCollector.collectAppInfo(context)
         val user = User(id = DeviceInfoCollector.generateUserId(context))
-        
+
         return BidRequest(
             id = UUID.randomUUID().toString(),
             impressions = listOf(
@@ -131,6 +147,7 @@ internal class AdManager {
     
     private suspend fun createInterstitialBidRequest(context: Context): BidRequest {
         val device = DeviceInfoCollector.collectDeviceInfo(context)
+        validateDevice(device)
         val app = DeviceInfoCollector.collectAppInfo(context)
         val user = User(id = DeviceInfoCollector.generateUserId(context))
 
@@ -154,6 +171,7 @@ internal class AdManager {
 
     private suspend fun createRewardedVideoBidRequest(context: Context): BidRequest {
         val device = DeviceInfoCollector.collectDeviceInfo(context)
+        validateDevice(device)
         val app = DeviceInfoCollector.collectAppInfo(context)
         val user = User(id = DeviceInfoCollector.generateUserId(context))
 
@@ -186,6 +204,15 @@ internal class AdManager {
         )
     }
     
+    private fun validateDevice(device: Device) {
+        if (device.width <= 0 || device.height <= 0) {
+            throw IllegalStateException("Invalid device dimensions: ${device.width}x${device.height}")
+        }
+        if (device.ppi <= 0) {
+            Log.w(TAG, "Invalid device PPI: ${device.ppi}, using device anyway")
+        }
+    }
+
     private fun parseAdFromResponse(bidResponse: BidResponse, adType: AdType): LoadedAd? {
         val seatBid = bidResponse.seatBids?.firstOrNull() ?: return null
         val bid = seatBid.bids.firstOrNull() ?: return null
@@ -254,8 +281,9 @@ data class AdError(
 object AdErrorCode {
     const val NO_FILL = 0
     const val NETWORK_ERROR = 1
-    const val INVALID_REQUEST = 2
-    const val INTERNAL_ERROR = 3
-    const val SDK_NOT_INITIALIZED = 4
+    const val TIMEOUT = 2
+    const val INVALID_REQUEST = 3
+    const val INTERNAL_ERROR = 4
+    const val SDK_NOT_INITIALIZED = 5
     const val UNKNOWN = 99
 }
