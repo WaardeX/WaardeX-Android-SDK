@@ -62,13 +62,73 @@ if (interstitialAd.isReady()) {
 }
 ```
 
+### 5. Rewarded Video Ad
+
+```kotlin
+val rewardedVideoAd = RewardedVideoAd(this)
+rewardedVideoAd.setAdListener(object : RewardedVideoAdListener {
+    override fun onAdLoaded() {
+        // Ad is ready to show
+    }
+
+    override fun onUserEarnedReward() {
+        // Give reward to user
+        giveRewardToUser()
+    }
+
+    override fun onAdDismissed() {
+        // Load next ad
+        rewardedVideoAd.loadAd()
+    }
+})
+rewardedVideoAd.loadAd()
+
+// Show when ready
+if (rewardedVideoAd.isReady()) {
+    rewardedVideoAd.show()
+}
+```
+
 ## Features
 
-- Banner ads (320x50, 300x250, 728x90)
-- Interstitial ads (full-screen)
-- OpenRTB 2.5 protocol
-- Automatic tracking
-- Debug mode
+- **Banner ads** (320x50, 300x250, 728x90)
+- **Interstitial ads** (full-screen)
+- **Rewarded video ads** (full-screen with reward callback)
+  - VAST XML support with automatic parsing
+  - HTML5 video support via WebView
+  - Native VideoView playback (no external dependencies)
+  - Automatic VAST tracking events (impression, start, complete)
+- **OpenRTB 2.5 protocol** compliant
+- **Automatic tracking** for impressions and clicks
+- **Debug mode** for development
+
+## Supported Video Formats
+
+### Rewarded Video
+- **VAST XML** - Automatically parsed, MediaFile URL extracted
+- **HTML5 video tag** - Rendered in WebView with JavaScript event tracking
+- **Video formats**: MP4, WebM, 3GPP
+
+## Lifecycle Management
+
+```kotlin
+override fun onPause() {
+    super.onPause()
+    bannerAd.pause()
+}
+
+override fun onResume() {
+    super.onResume()
+    bannerAd.resume()
+}
+
+override fun onDestroy() {
+    super.onDestroy()
+    bannerAd.destroy()
+    interstitialAd.destroy()
+    rewardedVideoAd.destroy()
+}
+```
 
 ## Support
 
