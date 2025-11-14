@@ -31,11 +31,17 @@ class RewardedVideoAd(private val activity: Activity) {
     private val adManager = AdManager()
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var loadedAd: LoadedAd? = null
+    private var loadedTime: Long = 0
+    private var impressionFired: Boolean = false
     private var vastData: VastParser.VastData? = null
     private var listener: RewardedVideoAdListener? = null
     private var dialog: Dialog? = null
     private var isLoading = false
     private var videoCompleted = false
+
+    companion object {
+        private const val AD_TTL_MS = 3600_000L // 1 hour
+    }
 
     fun loadAd() {
         if (isLoading) {
@@ -45,12 +51,16 @@ class RewardedVideoAd(private val activity: Activity) {
 
         isLoading = true
         loadedAd = null
+        loadedTime = 0
+        impressionFired = false
         vastData = null
 
         adManager.loadRewardedVideoAd(activity, object : AdLoadListener {
             override fun onAdLoaded(ad: LoadedAd) {
                 isLoading = false
                 loadedAd = ad
+                loadedTime = System.currentTimeMillis()
+                impressionFired = false
 
                 // Перевіряємо чи це VAST XML
                 if (VastParser.isVastXml(ad.adMarkup)) {
@@ -58,6 +68,8 @@ class RewardedVideoAd(private val activity: Activity) {
                     if (vastData != null) {
                         listener?.onAdLoaded()
                     } else {
+                        loadedAd = null
+                        loadedTime = 0
                         listener?.onAdFailedToLoad(AdError("Failed to parse VAST XML", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
                     }
                 } else {
@@ -73,7 +85,21 @@ class RewardedVideoAd(private val activity: Activity) {
         })
     }
 
-    fun isReady(): Boolean = loadedAd != null
+    fun isReady(): Boolean {
+        val ad = loadedAd ?: return false
+
+        // Check TTL
+        if (System.currentTimeMillis() - loadedTime > AD_TTL_MS) {
+            Log.w(TAG, "Ad expired (TTL exceeded)")
+            loadedAd = null
+            loadedTime = 0
+            impressionFired = false
+            vastData = null
+            return false
+        }
+
+        return true
+    }
 
     fun show() {
         val ad = loadedAd
@@ -83,16 +109,34 @@ class RewardedVideoAd(private val activity: Activity) {
             return
         }
 
+        // Check TTL
+        if (System.currentTimeMillis() - loadedTime > AD_TTL_MS) {
+            loadedAd = null
+            loadedTime = 0
+            impressionFired = false
+            vastData = null
+            listener?.onAdFailedToShow(AdError("Ad expired", com.waardex.adsdk.core.AdErrorCode.INVALID_REQUEST))
+            return
+        }
+
         if (activity.isFinishing || activity.isDestroyed) {
             listener?.onAdFailedToShow(AdError("Activity not available", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             return
         }
 
+        // Cache vastData before clearing loadedAd
+        val currentVastData = vastData
+
+        // Mark ad as used immediately to prevent double-show
+        loadedAd = null
+        loadedTime = 0
+        vastData = null
+
         activity.runOnUiThread {
             try {
                 videoCompleted = false
-                if (vastData != null) {
-                    showVastVideo(ad, vastData!!)
+                if (currentVastData != null) {
+                    showVastVideo(ad, currentVastData)
                 } else {
                     showHtmlVideo(ad)
                 }
@@ -181,21 +225,23 @@ class RewardedVideoAd(private val activity: Activity) {
 
             setOnDismissListener {
                 listener?.onAdDismissed()
-                loadedAd = null
-                vastData = null
+                // loadedAd is already cleared in show() to prevent double-show
             }
 
             show()
             listener?.onAdShown()
 
-            // Fire impression tracking
-            adManager.fireImpression(ad)
-            vast.impressionUrls.forEach { url ->
-                scope.launch(Dispatchers.IO) {
-                    adManager.fireTrackingPixel(url)
+            // Fire impression tracking only once to prevent fraud
+            if (!impressionFired) {
+                adManager.fireImpression(ad)
+                vast.impressionUrls.forEach { url ->
+                    scope.launch(Dispatchers.IO) {
+                        adManager.fireTrackingPixel(url)
+                    }
                 }
+                fireTrackingEvent(vast, "start")
+                impressionFired = true
             }
-            fireTrackingEvent(vast, "start")
         }
     }
 
@@ -229,8 +275,13 @@ class RewardedVideoAd(private val activity: Activity) {
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        listener?.onAdImpression()
-                        adManager.fireImpression(ad)
+
+                        // Fire impression only once to prevent fraud
+                        if (!impressionFired) {
+                            listener?.onAdImpression()
+                            adManager.fireImpression(ad)
+                            impressionFired = true
+                        }
                     }
                 }
 
@@ -278,7 +329,7 @@ class RewardedVideoAd(private val activity: Activity) {
 
             setOnDismissListener {
                 listener?.onAdDismissed()
-                loadedAd = null
+                // loadedAd is already cleared in show() to prevent double-show
             }
 
             show()
