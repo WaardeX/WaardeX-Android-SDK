@@ -53,14 +53,25 @@ internal class OpenRTBClient {
                 .build()
             
             val response = client.newCall(request).execute()
-            
-            if (!response.isSuccessful) {
-                return Result.failure(IOException("HTTP ${response.code}"))
+
+            // HTTP 204 No Content is the standard way to indicate no bid in OpenRTB
+            if (response.code == 204) {
+                return Result.failure(NoBidException("No bid (HTTP 204)"))
             }
-            
+
+            if (!response.isSuccessful) {
+                val errorMessage = when (response.code) {
+                    404 -> "Endpoint not found (HTTP 404) - check base URL"
+                    403 -> "Access forbidden (HTTP 403) - check credentials"
+                    500, 502, 503, 504 -> "Server error (HTTP ${response.code})"
+                    else -> "HTTP ${response.code}"
+                }
+                return Result.failure(IOException(errorMessage))
+            }
+
             val responseBody = response.body?.string()
             if (responseBody.isNullOrEmpty()) {
-                return Result.failure(NoBidException("Empty response"))
+                return Result.failure(NoBidException("Empty response body"))
             }
             
             val bidResponse = gson.fromJson(responseBody, BidResponse::class.java)
