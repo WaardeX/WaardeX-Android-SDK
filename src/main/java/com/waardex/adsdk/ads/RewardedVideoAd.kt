@@ -58,7 +58,7 @@ class RewardedVideoAd(private val activity: Activity) {
                     if (vastData != null) {
                         listener?.onAdLoaded()
                     } else {
-                        listener?.onAdFailedToLoad(AdError("Failed to parse VAST XML"))
+                        listener?.onAdFailedToLoad(AdError("Failed to parse VAST XML", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
                     }
                 } else {
                     // HTML5 video
@@ -79,12 +79,12 @@ class RewardedVideoAd(private val activity: Activity) {
         val ad = loadedAd
 
         if (ad == null) {
-            listener?.onAdFailedToShow(AdError("Ad not loaded"))
+            listener?.onAdFailedToShow(AdError("Ad not loaded", com.waardex.adsdk.core.AdErrorCode.INVALID_REQUEST))
             return
         }
 
         if (activity.isFinishing || activity.isDestroyed) {
-            listener?.onAdFailedToShow(AdError("Activity not available"))
+            listener?.onAdFailedToShow(AdError("Activity not available", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             return
         }
 
@@ -98,7 +98,7 @@ class RewardedVideoAd(private val activity: Activity) {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error showing ad", e)
-                listener?.onAdFailedToShow(AdError(e.message ?: "Unknown error"))
+                listener?.onAdFailedToShow(AdError(e.message ?: "Unknown error", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             }
         }
     }
@@ -167,7 +167,7 @@ class RewardedVideoAd(private val activity: Activity) {
 
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "Video error: what=$what, extra=$extra")
-                    listener?.onAdFailedToShow(AdError("Video playback error"))
+                    listener?.onAdFailedToShow(AdError("Video playback error", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
                     dismiss()
                     true
                 }

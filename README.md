@@ -109,6 +109,52 @@ if (rewardedVideoAd.isReady()) {
 - **HTML5 video tag** - Rendered in WebView with JavaScript event tracking
 - **Video formats**: MP4, WebM, 3GPP
 
+## Error Handling
+
+The SDK provides error codes to differentiate between "no fill" (no ads available) and actual errors:
+
+```kotlin
+rewardedVideoAd.setAdListener(object : RewardedVideoAdListener {
+    override fun onAdFailedToLoad(error: AdError) {
+        when (error.code) {
+            AdErrorCode.NO_FILL -> {
+                // Normal situation - no ads available right now
+                // This is NOT an error, just retry later
+                Log.d(TAG, "No ads available")
+            }
+            AdErrorCode.NETWORK_ERROR -> {
+                // Network connectivity issues
+                Log.e(TAG, "Network error: ${error.message}")
+            }
+            AdErrorCode.INVALID_REQUEST -> {
+                // Invalid ad request or configuration
+                Log.e(TAG, "Invalid request: ${error.message}")
+            }
+            AdErrorCode.INTERNAL_ERROR -> {
+                // SDK internal error
+                Log.e(TAG, "Internal error: ${error.message}")
+            }
+            AdErrorCode.SDK_NOT_INITIALIZED -> {
+                // SDK not initialized
+                Log.e(TAG, "SDK not initialized")
+            }
+            else -> {
+                Log.e(TAG, "Unknown error: ${error.message}")
+            }
+        }
+    }
+})
+```
+
+### Error Codes
+
+- **`NO_FILL` (0)** - No ads available (not an error, normal business situation)
+- **`NETWORK_ERROR` (1)** - Network connectivity issues
+- **`INVALID_REQUEST` (2)** - Invalid ad request or configuration
+- **`INTERNAL_ERROR` (3)** - SDK internal error
+- **`SDK_NOT_INITIALIZED` (4)** - SDK not initialized
+- **`UNKNOWN` (99)** - Unknown error
+
 ## Lifecycle Management
 
 ```kotlin

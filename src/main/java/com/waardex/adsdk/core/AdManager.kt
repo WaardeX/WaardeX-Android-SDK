@@ -8,6 +8,7 @@ import com.waardex.adsdk.network.NoBidException
 import com.waardex.adsdk.network.OpenRTBClient
 import com.waardex.adsdk.utils.DeviceInfoCollector
 import kotlinx.coroutines.*
+import java.io.IOException
 import java.util.UUID
 
 internal class AdManager {
@@ -17,36 +18,37 @@ internal class AdManager {
     
     fun loadBannerAd(context: Context, width: Int, height: Int, listener: AdLoadListener) {
         if (!WaardeXAdSDK.isInitialized()) {
-            listener.onAdFailedToLoad(AdError("SDK not initialized"))
+            listener.onAdFailedToLoad(AdError("SDK not initialized", AdErrorCode.SDK_NOT_INITIALIZED))
             return
         }
-        
+
         scope.launch {
             try {
                 val bidRequest = createBannerBidRequest(context, width, height)
                 val result = withContext(Dispatchers.IO) { client.sendBidRequest(bidRequest) }
-                
+
                 result.fold(
                     onSuccess = { bidResponse ->
                         val ad = parseAdFromResponse(bidResponse, AdType.BANNER)
                         if (ad != null) listener.onAdLoaded(ad)
-                        else listener.onAdFailedToLoad(AdError("Failed to parse ad"))
+                        else listener.onAdFailedToLoad(AdError("Failed to parse ad", AdErrorCode.INTERNAL_ERROR))
                     },
                     onFailure = { exception ->
-                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill"))
-                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error"))
+                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
+                        else if (exception is IOException) listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
+                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
                     }
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading banner ad", e)
-                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error"))
+                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error", AdErrorCode.INTERNAL_ERROR))
             }
         }
     }
     
     fun loadInterstitialAd(context: Context, listener: AdLoadListener) {
         if (!WaardeXAdSDK.isInitialized()) {
-            listener.onAdFailedToLoad(AdError("SDK not initialized"))
+            listener.onAdFailedToLoad(AdError("SDK not initialized", AdErrorCode.SDK_NOT_INITIALIZED))
             return
         }
 
@@ -59,23 +61,24 @@ internal class AdManager {
                     onSuccess = { bidResponse ->
                         val ad = parseAdFromResponse(bidResponse, AdType.INTERSTITIAL)
                         if (ad != null) listener.onAdLoaded(ad)
-                        else listener.onAdFailedToLoad(AdError("Failed to parse ad"))
+                        else listener.onAdFailedToLoad(AdError("Failed to parse ad", AdErrorCode.INTERNAL_ERROR))
                     },
                     onFailure = { exception ->
-                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill"))
-                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error"))
+                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
+                        else if (exception is IOException) listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
+                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
                     }
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading interstitial ad", e)
-                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error"))
+                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error", AdErrorCode.INTERNAL_ERROR))
             }
         }
     }
 
     fun loadRewardedVideoAd(context: Context, listener: AdLoadListener) {
         if (!WaardeXAdSDK.isInitialized()) {
-            listener.onAdFailedToLoad(AdError("SDK not initialized"))
+            listener.onAdFailedToLoad(AdError("SDK not initialized", AdErrorCode.SDK_NOT_INITIALIZED))
             return
         }
 
@@ -88,16 +91,17 @@ internal class AdManager {
                     onSuccess = { bidResponse ->
                         val ad = parseAdFromResponse(bidResponse, AdType.REWARDED)
                         if (ad != null) listener.onAdLoaded(ad)
-                        else listener.onAdFailedToLoad(AdError("Failed to parse ad"))
+                        else listener.onAdFailedToLoad(AdError("Failed to parse ad", AdErrorCode.INTERNAL_ERROR))
                     },
                     onFailure = { exception ->
-                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill"))
-                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error"))
+                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill", AdErrorCode.NO_FILL))
+                        else if (exception is IOException) listener.onAdFailedToLoad(AdError(exception.message ?: "Network error", AdErrorCode.NETWORK_ERROR))
+                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error", AdErrorCode.UNKNOWN))
                     }
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading rewarded video ad", e)
-                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error"))
+                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error", AdErrorCode.INTERNAL_ERROR))
             }
         }
     }
@@ -244,5 +248,14 @@ enum class AdType {
 
 data class AdError(
     val message: String,
-    val code: Int = 0
+    val code: Int = AdErrorCode.UNKNOWN
 )
+
+object AdErrorCode {
+    const val NO_FILL = 0
+    const val NETWORK_ERROR = 1
+    const val INVALID_REQUEST = 2
+    const val INTERNAL_ERROR = 3
+    const val SDK_NOT_INITIALIZED = 4
+    const val UNKNOWN = 99
+}

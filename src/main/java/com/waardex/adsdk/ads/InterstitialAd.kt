@@ -51,22 +51,22 @@ class InterstitialAd(private val activity: Activity) {
     
     fun show() {
         val ad = loadedAd
-        
+
         if (ad == null) {
-            listener?.onAdFailedToShow(AdError("Ad not loaded"))
+            listener?.onAdFailedToShow(AdError("Ad not loaded", com.waardex.adsdk.core.AdErrorCode.INVALID_REQUEST))
             return
         }
-        
+
         if (activity.isFinishing || activity.isDestroyed) {
-            listener?.onAdFailedToShow(AdError("Activity not available"))
+            listener?.onAdFailedToShow(AdError("Activity not available", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             return
         }
-        
+
         activity.runOnUiThread {
             try {
                 showAdDialog(ad)
             } catch (e: Exception) {
-                listener?.onAdFailedToShow(AdError(e.message ?: "Unknown error"))
+                listener?.onAdFailedToShow(AdError(e.message ?: "Unknown error", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             }
         }
     }

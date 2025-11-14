@@ -82,7 +82,7 @@ class BannerAdView @JvmOverloads constructor(
     fun loadAd() {
         if (width <= 0 || height <= 0) {
             Log.e(TAG, "BannerAdView must have explicit width and height")
-            listener?.onAdFailedToLoad(AdError("Invalid size"))
+            listener?.onAdFailedToLoad(AdError("Invalid size", com.waardex.adsdk.core.AdErrorCode.INVALID_REQUEST))
             return
         }
         
@@ -113,7 +113,7 @@ class BannerAdView @JvmOverloads constructor(
                 webView?.loadDataWithBaseURL(null, ad.adMarkup, "text/html", "UTF-8", null)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to display ad", e)
-                listener?.onAdFailedToLoad(AdError("Failed to display ad"))
+                listener?.onAdFailedToLoad(AdError("Failed to display ad", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             }
         }
     }
