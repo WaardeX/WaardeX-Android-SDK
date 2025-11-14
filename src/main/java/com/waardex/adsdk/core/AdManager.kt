@@ -49,12 +49,12 @@ internal class AdManager {
             listener.onAdFailedToLoad(AdError("SDK not initialized"))
             return
         }
-        
+
         scope.launch {
             try {
                 val bidRequest = createInterstitialBidRequest(context)
                 val result = withContext(Dispatchers.IO) { client.sendBidRequest(bidRequest) }
-                
+
                 result.fold(
                     onSuccess = { bidResponse ->
                         val ad = parseAdFromResponse(bidResponse, AdType.INTERSTITIAL)
@@ -68,6 +68,35 @@ internal class AdManager {
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading interstitial ad", e)
+                listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error"))
+            }
+        }
+    }
+
+    fun loadRewardedVideoAd(context: Context, listener: AdLoadListener) {
+        if (!WaardeXAdSDK.isInitialized()) {
+            listener.onAdFailedToLoad(AdError("SDK not initialized"))
+            return
+        }
+
+        scope.launch {
+            try {
+                val bidRequest = createRewardedVideoBidRequest(context)
+                val result = withContext(Dispatchers.IO) { client.sendBidRequest(bidRequest) }
+
+                result.fold(
+                    onSuccess = { bidResponse ->
+                        val ad = parseAdFromResponse(bidResponse, AdType.REWARDED)
+                        if (ad != null) listener.onAdLoaded(ad)
+                        else listener.onAdFailedToLoad(AdError("Failed to parse ad"))
+                    },
+                    onFailure = { exception ->
+                        if (exception is NoBidException) listener.onAdFailedToLoad(AdError("No fill"))
+                        else listener.onAdFailedToLoad(AdError(exception.message ?: "Unknown error"))
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading rewarded video ad", e)
                 listener.onAdFailedToLoad(AdError(e.message ?: "Unknown error"))
             }
         }
@@ -100,7 +129,7 @@ internal class AdManager {
         val device = DeviceInfoCollector.collectDeviceInfo(context)
         val app = DeviceInfoCollector.collectAppInfo(context)
         val user = User(id = DeviceInfoCollector.generateUserId(context))
-        
+
         return BidRequest(
             id = UUID.randomUUID().toString(),
             impressions = listOf(
@@ -109,6 +138,40 @@ internal class AdManager {
                     banner = Banner(width = device.width, height = device.height, position = 7),
                     instl = 1,
                     bidFloor = 0.05,
+                    secure = 1
+                )
+            ),
+            app = app,
+            device = device,
+            user = user,
+            test = if (WaardeXAdSDK.isDebugMode) 1 else 0
+        )
+    }
+
+    private suspend fun createRewardedVideoBidRequest(context: Context): BidRequest {
+        val device = DeviceInfoCollector.collectDeviceInfo(context)
+        val app = DeviceInfoCollector.collectAppInfo(context)
+        val user = User(id = DeviceInfoCollector.generateUserId(context))
+
+        return BidRequest(
+            id = UUID.randomUUID().toString(),
+            impressions = listOf(
+                Impression(
+                    id = UUID.randomUUID().toString(),
+                    video = Video(
+                        mimes = listOf("video/mp4", "video/webm", "video/3gpp"),
+                        minDuration = 5,
+                        maxDuration = 30,
+                        protocols = listOf(2, 3, 5, 6),
+                        width = device.width,
+                        height = device.height,
+                        startDelay = 0,
+                        linearity = 1,
+                        skip = 0,
+                        position = 7
+                    ),
+                    instl = 1,
+                    bidFloor = 0.10,
                     secure = 1
                 )
             ),
@@ -141,6 +204,12 @@ internal class AdManager {
             scope.launch(Dispatchers.IO) {
                 client.fireTrackingPixel(ad.noticeUrl)
             }
+        }
+    }
+
+    fun fireTrackingPixel(url: String) {
+        scope.launch(Dispatchers.IO) {
+            client.fireTrackingPixel(url)
         }
     }
     
