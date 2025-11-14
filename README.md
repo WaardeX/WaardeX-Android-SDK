@@ -101,6 +101,14 @@ if (rewardedVideoAd.isReady()) {
 - **OpenRTB 2.5 protocol** compliant
 - **Automatic tracking** for impressions and clicks
 - **Debug mode** for development
+- **Rich data enrichment** for better bid rates:
+  - Google Advertising ID (GAID) with limit tracking support
+  - IP address detection for geo-targeting
+  - Detailed connection type (WiFi, 2G, 3G, 4G, 5G)
+  - High-quality User Agent from WebView
+  - Geo location (if permissions granted)
+  - Play Store URL for app verification
+  - Device metrics, manufacturer, OS version
 
 ## Supported Video Formats
 
@@ -181,6 +189,29 @@ override fun onDestroy() {
     rewardedVideoAd.destroy()
 }
 ```
+
+## Permissions
+
+### Required Permissions
+
+Add these to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+```
+
+### Optional Permissions (for better bid rates)
+
+These permissions improve ad targeting and revenue but are not required:
+
+```xml
+<!-- For geo-targeting (improves CPM by ~15-30%) -->
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+```
+
+**Note**: The SDK automatically detects available permissions and collects only the data it has access to. If location permissions are not granted, geo data will not be included in bid requests.
 
 ## Support
 
