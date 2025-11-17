@@ -220,12 +220,12 @@ internal object DeviceInfoCollector {
     }
 
     /**
-     * Get geo location if permission is granted
+     * Get geo location if permission is granted, with fallback to IP-based geolocation
      */
     private fun getGeoLocation(context: Context): Geo? {
         try {
-            // Get country code (ISO 3166-1 alpha-3)
-            val countryCode = getCountryCode(context)
+            // Get country code from SIM/locale (ISO 3166-1 alpha-3)
+            val countryCodeFromSim = getCountryCode(context)
 
             // Check if location permission is granted
             val hasCoarseLocation = ContextCompat.checkSelfPermission(
@@ -238,48 +238,60 @@ internal object DeviceInfoCollector {
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
 
-            if (!hasCoarseLocation && !hasFineLocation) {
-                // No location permission, but can still send country
-                return if (countryCode != null) {
-                    Geo(country = countryCode, type = 2)
-                } else {
-                    null
+            // Try GPS/WiFi location first (most accurate)
+            if (hasCoarseLocation || hasFineLocation) {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+
+                if (locationManager != null) {
+                    val providers = locationManager.getProviders(true)
+                    var lastKnownLocation: android.location.Location? = null
+
+                    for (provider in providers) {
+                        val location = locationManager.getLastKnownLocation(provider) ?: continue
+                        if (lastKnownLocation == null || location.accuracy < lastKnownLocation.accuracy) {
+                            lastKnownLocation = location
+                        }
+                    }
+
+                    if (lastKnownLocation != null) {
+                        return Geo(
+                            latitude = lastKnownLocation.latitude,
+                            longitude = lastKnownLocation.longitude,
+                            country = countryCodeFromSim,
+                            type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=IP/WiFi
+                        )
+                    }
                 }
             }
 
-            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                ?: return if (countryCode != null) {
-                    Geo(country = countryCode, type = 2)
-                } else {
-                    null
-                }
+            // Fallback to IP-based geolocation (if GeoIP database is ready)
+            val ipAddress = getDeviceIpAddress()
+            if (ipAddress != null && GeoIPManager.isDatabaseReady()) {
+                val cityData = GeoIPManager.lookupCity(ipAddress)
+                if (cityData != null) {
+                    // Convert ISO alpha-2 to alpha-3
+                    val countryAlpha3 = cityData.country?.let { alpha2 ->
+                        convertCountryCodeToAlpha3(alpha2)
+                    }
 
-            // Get last known location
-            val providers = locationManager.getProviders(true)
-            var lastKnownLocation: android.location.Location? = null
-
-            for (provider in providers) {
-                val location = locationManager.getLastKnownLocation(provider) ?: continue
-                if (lastKnownLocation == null || location.accuracy < lastKnownLocation.accuracy) {
-                    lastKnownLocation = location
+                    return Geo(
+                        latitude = cityData.latitude,
+                        longitude = cityData.longitude,
+                        country = countryAlpha3 ?: countryCodeFromSim,
+                        city = cityData.city,
+                        type = 2 // IP-based
+                    )
                 }
             }
 
-            return if (lastKnownLocation != null) {
-                Geo(
-                    latitude = lastKnownLocation.latitude,
-                    longitude = lastKnownLocation.longitude,
-                    country = countryCode,
-                    type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=IP/WiFi
-                )
-            } else if (countryCode != null) {
-                // No location but have country
-                Geo(country = countryCode, type = 2)
+            // Final fallback - just country from SIM/locale
+            return if (countryCodeFromSim != null) {
+                Geo(country = countryCodeFromSim, type = 2)
             } else {
                 null
             }
         } catch (e: SecurityException) {
-            // Permission not granted - try to get at least country
+            // Permission not granted - try to get at least country from SIM
             val countryCode = getCountryCode(context)
             return if (countryCode != null) {
                 Geo(country = countryCode, type = 2)
