@@ -220,7 +220,9 @@ internal object DeviceInfoCollector {
     }
 
     /**
-     * Get geo location if permission is granted, with fallback to IP-based geolocation
+     * Get geo location - simplified for server-side enrichment
+     * Collects GPS location (if permission granted) and country from SIM
+     * Server will enrich with precise IP-based geolocation
      */
     private fun getGeoLocation(context: Context): Geo? {
         try {
@@ -258,33 +260,14 @@ internal object DeviceInfoCollector {
                             latitude = lastKnownLocation.latitude,
                             longitude = lastKnownLocation.longitude,
                             country = countryCodeFromSim,
-                            type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=IP/WiFi
+                            type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=WiFi
                         )
                     }
                 }
             }
 
-            // Fallback to IP-based geolocation (if GeoIP database is ready)
-            val ipAddress = getDeviceIpAddress()
-            if (ipAddress != null && GeoIPManager.isDatabaseReady()) {
-                val cityData = GeoIPManager.lookupCity(ipAddress)
-                if (cityData != null) {
-                    // Convert ISO alpha-2 to alpha-3
-                    val countryAlpha3 = cityData.country?.let { alpha2 ->
-                        convertCountryCodeToAlpha3(alpha2)
-                    }
-
-                    return Geo(
-                        latitude = cityData.latitude,
-                        longitude = cityData.longitude,
-                        country = countryAlpha3 ?: countryCodeFromSim,
-                        city = cityData.city,
-                        type = 2 // IP-based
-                    )
-                }
-            }
-
-            // Final fallback - just country from SIM/locale
+            // Fallback - just country from SIM/locale
+            // Server will enrich with precise location via IP lookup
             return if (countryCodeFromSim != null) {
                 Geo(country = countryCodeFromSim, type = 2)
             } else {
