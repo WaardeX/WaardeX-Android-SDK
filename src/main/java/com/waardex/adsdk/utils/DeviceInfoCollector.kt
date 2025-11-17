@@ -224,6 +224,9 @@ internal object DeviceInfoCollector {
      */
     private fun getGeoLocation(context: Context): Geo? {
         try {
+            // Get country code (ISO 3166-1 alpha-3)
+            val countryCode = getCountryCode(context)
+
             // Check if location permission is granted
             val hasCoarseLocation = ContextCompat.checkSelfPermission(
                 context,
@@ -236,11 +239,20 @@ internal object DeviceInfoCollector {
             ) == PackageManager.PERMISSION_GRANTED
 
             if (!hasCoarseLocation && !hasFineLocation) {
-                return null
+                // No location permission, but can still send country
+                return if (countryCode != null) {
+                    Geo(country = countryCode, type = 2)
+                } else {
+                    null
+                }
             }
 
             val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                ?: return null
+                ?: return if (countryCode != null) {
+                    Geo(country = countryCode, type = 2)
+                } else {
+                    null
+                }
 
             // Get last known location
             val providers = locationManager.getProviders(true)
@@ -257,16 +269,68 @@ internal object DeviceInfoCollector {
                 Geo(
                     latitude = lastKnownLocation.latitude,
                     longitude = lastKnownLocation.longitude,
+                    country = countryCode,
                     type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=IP/WiFi
                 )
+            } else if (countryCode != null) {
+                // No location but have country
+                Geo(country = countryCode, type = 2)
             } else {
                 null
             }
         } catch (e: SecurityException) {
-            // Permission not granted
-            return null
+            // Permission not granted - try to get at least country
+            val countryCode = getCountryCode(context)
+            return if (countryCode != null) {
+                Geo(country = countryCode, type = 2)
+            } else {
+                null
+            }
         } catch (e: Exception) {
             return null
+        }
+    }
+
+    /**
+     * Get country code (ISO 3166-1 alpha-3) from SIM or system locale
+     */
+    private fun getCountryCode(context: Context): String? {
+        try {
+            // First try to get from SIM card (most accurate for mobile targeting)
+            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            val simCountry = telephonyManager?.simCountryIso?.uppercase()
+
+            if (!simCountry.isNullOrEmpty() && simCountry.length == 2) {
+                // Convert ISO 3166-1 alpha-2 to alpha-3
+                return convertCountryCodeToAlpha3(simCountry)
+            }
+
+            // Fallback to network country (from cell tower)
+            val networkCountry = telephonyManager?.networkCountryIso?.uppercase()
+            if (!networkCountry.isNullOrEmpty() && networkCountry.length == 2) {
+                return convertCountryCodeToAlpha3(networkCountry)
+            }
+
+            // Fallback to system locale
+            val localeCountry = Locale.getDefault().country.uppercase()
+            if (localeCountry.isNotEmpty() && localeCountry.length == 2) {
+                return convertCountryCodeToAlpha3(localeCountry)
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        return null
+    }
+
+    /**
+     * Convert ISO 3166-1 alpha-2 to alpha-3 country code
+     */
+    private fun convertCountryCodeToAlpha3(alpha2: String): String? {
+        return try {
+            val locale = Locale("", alpha2)
+            locale.isO3Country
+        } catch (e: Exception) {
+            null
         }
     }
 }
