@@ -104,11 +104,37 @@ if (rewardedVideoAd.isReady()) {
 - **Rich data enrichment** for better bid rates:
   - Google Advertising ID (GAID) with limit tracking support
   - IP address detection for geo-targeting
+  - **IP-based geo location** with MaxMind GeoLite2-City database
+    - Automatic download on first initialization (~70 MB)
+    - Country + City detection from IP address
+    - Auto-updates every 30 days
+    - Works without location permissions
   - Detailed connection type (WiFi, 2G, 3G, 4G, 5G)
   - High-quality User Agent from WebView
-  - Geo location (if permissions granted)
+  - GPS/WiFi location (if permissions granted)
   - Play Store URL for app verification
   - Device metrics, manufacturer, OS version
+
+## GeoIP Database
+
+The SDK automatically downloads **MaxMind GeoLite2-City** database (~70 MB) on first initialization. This enables accurate country and city detection from IP addresses without requiring location permissions.
+
+**Features:**
+- Automatic download in background (non-blocking)
+- Auto-updates every 30 days
+- Fallback to SIM-based country if database unavailable
+- No API keys required (free public database)
+
+**First launch behavior:**
+- SDK initializes immediately
+- GeoIP database downloads in background (~70 MB)
+- Ads work during download using SIM-based country
+- Once downloaded, IP-based city/country available for all subsequent requests
+
+**Data priority:**
+1. **GPS/WiFi location** (if permissions granted) - most accurate
+2. **IP-based location** (from GeoLite2 database) - good accuracy, no permissions
+3. **SIM-based country** (fallback) - country only
 
 ## Supported Video Formats
 

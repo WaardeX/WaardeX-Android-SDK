@@ -220,10 +220,13 @@ internal object DeviceInfoCollector {
     }
 
     /**
-     * Get geo location if permission is granted
+     * Get geo location if permission is granted, with fallback to IP-based geolocation
      */
     private fun getGeoLocation(context: Context): Geo? {
         try {
+            // Get country code from SIM/locale (ISO 3166-1 alpha-3)
+            val countryCodeFromSim = getCountryCode(context)
+
             // Check if location permission is granted
             val hasCoarseLocation = ContextCompat.checkSelfPermission(
                 context,
@@ -235,38 +238,111 @@ internal object DeviceInfoCollector {
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
 
-            if (!hasCoarseLocation && !hasFineLocation) {
-                return null
-            }
+            // Try GPS/WiFi location first (most accurate)
+            if (hasCoarseLocation || hasFineLocation) {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
 
-            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                ?: return null
+                if (locationManager != null) {
+                    val providers = locationManager.getProviders(true)
+                    var lastKnownLocation: android.location.Location? = null
 
-            // Get last known location
-            val providers = locationManager.getProviders(true)
-            var lastKnownLocation: android.location.Location? = null
+                    for (provider in providers) {
+                        val location = locationManager.getLastKnownLocation(provider) ?: continue
+                        if (lastKnownLocation == null || location.accuracy < lastKnownLocation.accuracy) {
+                            lastKnownLocation = location
+                        }
+                    }
 
-            for (provider in providers) {
-                val location = locationManager.getLastKnownLocation(provider) ?: continue
-                if (lastKnownLocation == null || location.accuracy < lastKnownLocation.accuracy) {
-                    lastKnownLocation = location
+                    if (lastKnownLocation != null) {
+                        return Geo(
+                            latitude = lastKnownLocation.latitude,
+                            longitude = lastKnownLocation.longitude,
+                            country = countryCodeFromSim,
+                            type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=IP/WiFi
+                        )
+                    }
                 }
             }
 
-            return if (lastKnownLocation != null) {
-                Geo(
-                    latitude = lastKnownLocation.latitude,
-                    longitude = lastKnownLocation.longitude,
-                    type = if (hasFineLocation) 1 else 2 // 1=GPS, 2=IP/WiFi
-                )
+            // Fallback to IP-based geolocation (if GeoIP database is ready)
+            val ipAddress = getDeviceIpAddress()
+            if (ipAddress != null && GeoIPManager.isDatabaseReady()) {
+                val cityData = GeoIPManager.lookupCity(ipAddress)
+                if (cityData != null) {
+                    // Convert ISO alpha-2 to alpha-3
+                    val countryAlpha3 = cityData.country?.let { alpha2 ->
+                        convertCountryCodeToAlpha3(alpha2)
+                    }
+
+                    return Geo(
+                        latitude = cityData.latitude,
+                        longitude = cityData.longitude,
+                        country = countryAlpha3 ?: countryCodeFromSim,
+                        city = cityData.city,
+                        type = 2 // IP-based
+                    )
+                }
+            }
+
+            // Final fallback - just country from SIM/locale
+            return if (countryCodeFromSim != null) {
+                Geo(country = countryCodeFromSim, type = 2)
             } else {
                 null
             }
         } catch (e: SecurityException) {
-            // Permission not granted
-            return null
+            // Permission not granted - try to get at least country from SIM
+            val countryCode = getCountryCode(context)
+            return if (countryCode != null) {
+                Geo(country = countryCode, type = 2)
+            } else {
+                null
+            }
         } catch (e: Exception) {
             return null
+        }
+    }
+
+    /**
+     * Get country code (ISO 3166-1 alpha-3) from SIM or system locale
+     */
+    private fun getCountryCode(context: Context): String? {
+        try {
+            // First try to get from SIM card (most accurate for mobile targeting)
+            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            val simCountry = telephonyManager?.simCountryIso?.uppercase()
+
+            if (!simCountry.isNullOrEmpty() && simCountry.length == 2) {
+                // Convert ISO 3166-1 alpha-2 to alpha-3
+                return convertCountryCodeToAlpha3(simCountry)
+            }
+
+            // Fallback to network country (from cell tower)
+            val networkCountry = telephonyManager?.networkCountryIso?.uppercase()
+            if (!networkCountry.isNullOrEmpty() && networkCountry.length == 2) {
+                return convertCountryCodeToAlpha3(networkCountry)
+            }
+
+            // Fallback to system locale
+            val localeCountry = Locale.getDefault().country.uppercase()
+            if (localeCountry.isNotEmpty() && localeCountry.length == 2) {
+                return convertCountryCodeToAlpha3(localeCountry)
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        return null
+    }
+
+    /**
+     * Convert ISO 3166-1 alpha-2 to alpha-3 country code
+     */
+    private fun convertCountryCodeToAlpha3(alpha2: String): String? {
+        return try {
+            val locale = Locale("", alpha2)
+            locale.isO3Country
+        } catch (e: Exception) {
+            null
         }
     }
 }

@@ -16,30 +16,40 @@ import com.waardex.adsdk.core.AdManager
 import com.waardex.adsdk.core.LoadedAd
 
 class InterstitialAd(private val activity: Activity) {
-    
+
     private val TAG = "InterstitialAd"
     private val adManager = AdManager()
     private var loadedAd: LoadedAd? = null
+    private var loadedTime: Long = 0
+    private var impressionFired: Boolean = false
     private var listener: InterstitialAdListener? = null
     private var dialog: Dialog? = null
     private var isLoading = false
+
+    companion object {
+        private const val AD_TTL_MS = 3600_000L // 1 hour
+    }
     
     fun loadAd() {
         if (isLoading) {
             Log.w(TAG, "Ad is already loading")
             return
         }
-        
+
         isLoading = true
         loadedAd = null
-        
+        loadedTime = 0
+        impressionFired = false
+
         adManager.loadInterstitialAd(activity, object : AdLoadListener {
             override fun onAdLoaded(ad: LoadedAd) {
                 isLoading = false
                 loadedAd = ad
+                loadedTime = System.currentTimeMillis()
+                impressionFired = false
                 listener?.onAdLoaded()
             }
-            
+
             override fun onAdFailedToLoad(error: AdError) {
                 isLoading = false
                 listener?.onAdFailedToLoad(error)
@@ -47,8 +57,21 @@ class InterstitialAd(private val activity: Activity) {
         })
     }
     
-    fun isReady(): Boolean = loadedAd != null
-    
+    fun isReady(): Boolean {
+        val ad = loadedAd ?: return false
+
+        // Check TTL
+        if (System.currentTimeMillis() - loadedTime > AD_TTL_MS) {
+            Log.w(TAG, "Ad expired (TTL exceeded)")
+            loadedAd = null
+            loadedTime = 0
+            impressionFired = false
+            return false
+        }
+
+        return true
+    }
+
     fun show() {
         val ad = loadedAd
 
@@ -57,10 +80,23 @@ class InterstitialAd(private val activity: Activity) {
             return
         }
 
+        // Check TTL
+        if (System.currentTimeMillis() - loadedTime > AD_TTL_MS) {
+            loadedAd = null
+            loadedTime = 0
+            impressionFired = false
+            listener?.onAdFailedToShow(AdError("Ad expired", com.waardex.adsdk.core.AdErrorCode.INVALID_REQUEST))
+            return
+        }
+
         if (activity.isFinishing || activity.isDestroyed) {
             listener?.onAdFailedToShow(AdError("Activity not available", com.waardex.adsdk.core.AdErrorCode.INTERNAL_ERROR))
             return
         }
+
+        // Mark ad as used immediately to prevent double-show
+        loadedAd = null
+        loadedTime = 0
 
         activity.runOnUiThread {
             try {
@@ -99,10 +135,15 @@ class InterstitialAd(private val activity: Activity) {
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        listener?.onAdImpression()
-                        adManager.fireImpression(ad)
+
+                        // Fire impression only once to prevent fraud
+                        if (!impressionFired) {
+                            listener?.onAdImpression()
+                            adManager.fireImpression(ad)
+                            impressionFired = true
+                        }
                     }
-                    
+
                     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                         url?.let {
                             listener?.onAdClicked()
@@ -142,12 +183,12 @@ class InterstitialAd(private val activity: Activity) {
             
             container.addView(closeButton)
             setContentView(container)
-            
+
             setOnDismissListener {
                 listener?.onAdDismissed()
-                loadedAd = null
+                // loadedAd is already cleared in show() to prevent double-show
             }
-            
+
             setCancelable(true)
             show()
             listener?.onAdShown()
